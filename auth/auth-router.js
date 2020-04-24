@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const Users = require('./usersModel');
 const bcrypt = require('bcrypt');
+const jwt = require("jsonwebtoken");
+const secrets = require("../api/secrets.js");
 
 router.post('/register', newUserVerification, (req, res) => {
   const user = req.body;
@@ -17,18 +19,20 @@ router.post('/register', newUserVerification, (req, res) => {
 });
 
 router.post('/login', (req, res) => {
-  const { username, password } = req.body;
-
+  let { username, password } = req.body;
   Users.findBy({ username })
     .then(([user]) => {
-      if(user && bcrypt.compareSync(password, user.password)) {
-        req.session.loggedIn = true
-        res.status(200).json({ message: `Permitted Access.` });
+      if (user && bcrypt.compareSync(password, user.password)) {
+        const token = generateToken(user);
+        res.status(200).json({ message: "Welcome!", token });
       } else {
-        res.status(401).json({ message: `Unauthorized Access, please login.` })
+        res.status(401).json({ message: "You cannot pass!" });
       }
     })
-    .catch(err => res.status(500).json({ errorMessage: `Internal server error`, err }))
+    .catch(error => {
+      console.log(error);
+      res.status(500).json({ errorMessage: error.message });
+    });
 });
 
 module.exports = router;
@@ -39,4 +43,18 @@ function newUserVerification(req, res, next) {
   if((user.username && user.password) && (user.username.length > 3 && user.password.length > 5)) {
     next()
   }
+}
+
+function generateToken(user) {
+  // the data
+  const payload = {
+    userId: user.id,
+    username: user.username,
+  };
+  const secret = secrets.jwtSecret;
+  const options = {
+    expiresIn: "1d",
+  };
+
+  return jwt.sign(payload, secret, options);
 }
